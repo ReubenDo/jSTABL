@@ -1,4 +1,4 @@
-# Scribble-based Domain Adaptation via Co-segmentation
+# Learning joint segmentation of tissues and brain lesions from task-specific hetero-modal domain-shifted datasets
 
 Public pytorch implementation for our paper [Learning joint segmentation of tissues and brain lesions from task-specific hetero-modal domain-shifted datasets], (https://arxiv.org/abs/2009.04009)
 which was invited in the MIDL 2019 Special Issue - Medical Image Analysis. 
