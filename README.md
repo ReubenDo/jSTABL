@@ -1,1 +1,1 @@
-# jSTABL
+# Learning joint brain tissue and lesion segmentation
