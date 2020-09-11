@@ -32,11 +32,11 @@ Without Domain Adaptation:
 
 With Data Augmentation:
 
-```` python3 train_WMH_noDA.py --model_dir ./models/BRATS/augm/ ````
+```` python3 train_BRATS_augmentation.py --model_dir ./models/BRATS/augm/ ````
 
 With Adversarial Domain Adaptation:
 
-```` python3 train_WMH_noDA.py --model_dir ./models/BRATS/adv/ ````
+```` python3 train_BRATS_adversarial.py --model_dir ./models/BRATS/adv/ ````
 
 
 With Annotated Pseudo-Healthy Scans:
