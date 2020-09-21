@@ -141,7 +141,7 @@ def multi_inference(paths_dict,
                     labels+= torch.nn.Softmax(1)(logits)
                 labels = labels.argmax(dim=1, keepdim=True)
                 labels = labels[0,0,...].cpu().numpy()
-         except RuntimeError as e:
+        except RuntimeError as e:
             print(e)
             print('Memory issue. Trying with a path based approach')
             multi_inference_patch(paths_dict, model, transformation, device, opt)
