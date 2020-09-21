@@ -89,7 +89,7 @@ def multi_inference(paths_dict,
                 input_tensor['all'] = batch_elemt['image'].to(device)
                 labels = 0.0
                 for fold in range(1,4):
-                    path_model = os.path.join(jstabl.__path__[0], f"./glioma/glioma_{fold}.pth")
+                    path_model = os.path.join(list(jstabl.__path__)[0], f"./glioma/glioma_{fold}.pth")
                     model.load_state_dict(torch.load(path_model))
                     logits,_ = model(input_tensor)
                     labels+= torch.nn.Softmax(1)(logits)
@@ -180,7 +180,7 @@ def main():
                         input_features={'T1':1, 'all':4})
     
     for fold in range(1,4):
-        path_model = os.path.join(jstabl.__path__[0], f"./glioma/glioma_{fold}.pth")
+        path_model = os.path.join(list(jstabl.__path__)[0], f"./glioma/glioma_{fold}.pth")
         if not os.path.isfile(path_model):
             url = f"https://zenodo.org/record/4040853/files/glioma_{fold}.pth?download=1"
             print("Downloading", url, "...")
