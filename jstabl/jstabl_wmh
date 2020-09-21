@@ -43,7 +43,7 @@ from jstabl.utilities.cropping import crop
 
    
 # Define training and patches sampling parameters   
-patch_size = (128,128,128)
+patch_size = (128,128,48)
 
 
 MODALITIES = ['T1', 'Flair']
@@ -70,7 +70,7 @@ def multi_inference_patch(paths_dict,
 
         new_shape = []
         for i,dim in enumerate(original_shape):
-            new_dim = dim if dim>patch_size[i] else patch_size[i]
+            new_dim = dim if dim>opt.window_size[i] else opt.window_size[i]
             new_shape.append(new_dim)
 
         batch_pad = CenterCropOrPad(tuple(new_shape))(batch)
@@ -131,16 +131,20 @@ def multi_inference(paths_dict,
 
         input_tensor = {'T1':batch_pad['T1'][DATA].unsqueeze(0).to(device)}
         input_tensor['FLAIR'] = torch.cat([batch_pad[mod][DATA] for mod in MODALITIES],0).unsqueeze(0).to(device) 
-
-        with torch.no_grad():
-            labels = 0.0
-            for fold in range(1,4):
-                path_model = os.path.join(list(jstabl.__path__)[0], f"./wmh/wmh_{fold}.pth")
-                model.load_state_dict(torch.load(path_model))
-                logits,_ = model(input_tensor)
-                labels+= torch.nn.Softmax(1)(logits)
-            labels = labels.argmax(dim=1, keepdim=True)
-            labels = labels[0,0,...].cpu().numpy()
+        try:
+            with torch.no_grad():
+                labels = 0.0
+                for fold in range(1,4):
+                    path_model = os.path.join(list(jstabl.__path__)[0], f"./wmh/wmh_{fold}.pth")
+                    model.load_state_dict(torch.load(path_model))
+                    logits,_ = model(input_tensor)
+                    labels+= torch.nn.Softmax(1)(logits)
+                labels = labels.argmax(dim=1, keepdim=True)
+                labels = labels[0,0,...].cpu().numpy()
+         except RuntimeError as e:
+            print(e)
+            print('Memory issue. Trying with a path based approach')
+            multi_inference_patch(paths_dict, model, transformation, device, opt)
         # output = np.zeros(shape[2:])
         # output[:x_shape,:y_shape,:z_shape] = labels
         output = labels
@@ -252,7 +256,7 @@ def parsing_data():
 
     parser.add_argument('-window_size',
                         type=tuple,
-                        default=(112,112,112))
+                        default=patch_size)
 
     parser.add_argument('-preprocess',
                         action='store_true', 
