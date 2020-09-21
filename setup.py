@@ -8,7 +8,10 @@ from setuptools import setup, find_packages
 
 requirements = [
     'torchio==0.13.10',
-    'batchgenerators>=0.19.4'
+    'batchgenerators>=0.19.4',
+    'pandas',
+    'nibabel',
+    'SimpleITK',
 ]
 
 setup(
@@ -34,7 +37,7 @@ setup(
     include_package_data=True,
     keywords='jSTABL',
     name='jSTABL',
-    packages=find_packages(include=['jstabl']),
+    packages=find_packages(include=['jstabl', 'jstabl.*']),
     scripts=['jstabl/jstabl_glioma', 'jstabl/jstabl_wmh'],
     setup_requires=[],
     tests_require=[],
