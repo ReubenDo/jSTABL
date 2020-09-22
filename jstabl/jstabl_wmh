@@ -91,7 +91,7 @@ def multi_inference_patch(paths_dict,
                 labels = 0.0
                 for fold in range(1,4):
                     path_model = os.path.join(list(jstabl.__path__)[0], f"./wmh/wmh_{fold}.pth")
-                    model.load_state_dict(torch.load(path_model))
+                    model.load_state_dict(torch.load(path_model, map_location=device))
                     logits,_ = model(input_tensor)
                     labels+= torch.nn.Softmax(1)(logits)
                 labels = labels.argmax(dim=1, keepdim=True)
@@ -136,7 +136,7 @@ def multi_inference(paths_dict,
                 labels = 0.0
                 for fold in range(1,4):
                     path_model = os.path.join(list(jstabl.__path__)[0], f"./wmh/wmh_{fold}.pth")
-                    model.load_state_dict(torch.load(path_model))
+                    model.load_state_dict(torch.load(path_model, map_location=device))
                     logits,_ = model(input_tensor)
                     labels+= torch.nn.Softmax(1)(logits)
                 labels = labels.argmax(dim=1, keepdim=True)
@@ -190,11 +190,10 @@ def main():
     print("[INFO] Reading data.")
     # Dictionary with data parameters for NiftyNet Reader
     if torch.cuda.is_available():
-        print('[INFO] GPU available.')
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print('[INFO] GPU available.')  
     else:
-        raise Exception(
-            "[INFO] No GPU found or Wrong gpu id, please run without --cuda")
+        print("[INFO] GPU isn't available. Using CPU instead.")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
    
     # filing paths
     paths_dict = [Subject(
