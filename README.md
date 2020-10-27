@@ -1,6 +1,10 @@
 # Learning joint Segmentation of Tissues And Brain Lesions (jSTABL) from task-specific hetero-modal domain-shifted datasets
 
-Public PyTorch implementation of the paper [Learning joint segmentation of tissues and brain lesions from task-specific hetero-modal domain-shifted datasets](https://arxiv.org/abs/2009.04009) published in Medical Image Analysis.
+Public PyTorch implementation of [Learning joint segmentation of tissues and brain lesions from task-specific hetero-modal domain-shifted datasets](https://arxiv.org/abs/2009.04009) published in Medical Image Analysis.
+
+This work propose a new technique to perform joint brain tissue and lesion segmentation. Due to the lack of fully-annotated data, the framework has been trained  using hetero-modal (missing modalities), task-specific (tissue or lesion annotations) and domain-shifted (different acquisition protocols) datasets.
+
+Two types of lesions are considered: gliomas and white matter lesions.
 
 If you find this code useful for your research, please cite the following paper:
 ```
@@ -19,15 +23,14 @@ keywords = "Joint learning, Domain adaptation, Multi-Task learning, Multi-Modal"
 ```
 
 ## Installation
-### 1. Create a conda environment (recommended)
-Within a conda environment:
+### 1. Create a [conda](https://docs.conda.io/en/latest/) environment (recommended)
 ```
 ENVNAME="jstablenv"
 conda create -n $ENVNAME python -y
 conda activate $ENVNAME
 ```
-### 2. Install PyTorch
-Given your CUDA Toolkit version, please install [PyTorch](https://pytorch.org/) within the conda environment.
+### 2. Install [PyTorch](https://pytorch.org/)
+Please install [PyTorch](https://pytorch.org/) for your CUDA toolkit within the conda environment:
 
 ### 3. Install jSTABL
 Within the conda environment:
@@ -35,20 +38,28 @@ Within the conda environment:
 pip install -e  git+https://github.com/ReubenDo/jSTABL#egg=jSTABL
 ```
 
-### (Optionnal) 4. Install MRIPreprocessor
-If your data is not pre-processed (skull-stripped and co-register) you could use the `MRIPreprocessor`:
-Within the conda environment:
+### (Optionnal) 4. Install [MRIPreprocessor](https://github.com/ReubenDo/MRIPreprocessor)
+If your data isn't preprocessed (skull-stripped and co-registered) you could use [MRIPreprocessor](https://github.com/ReubenDo/MRIPreprocessor). 
+
+To install it within the conda environment:
 ```
 pip install git+https://github.com/ReubenDo/MRIPreprocessor#egg=MRIPreprocessor
 ```
 
 ## Usage
-### Glioma
+Using jSTABL is straightforward in any terminal on your linux system. The following examples show how to perform: 1. joint brain tissues and gliomas segmentation; 2. joint brain tissues and white matter lesion segmentation.
 
-- If the T1, T1-c, T2 and FLAIR scans are pre-processed (skull-stripped and coregistered):
+The framework has been trained on preprocessed data, i.e. on skull-stripped and coregistered scans. 
+
+If the data is not already preprocessed, an external library [MRIPreprocessor](https://github.com/ReubenDo/MRIPreprocessor) can be directly employed in the framework to perform this preprocessing. Note that other options such as the [BraTS Toolkit](https://github.com/neuronflow/BraTS-Toolkit) are also available.
+
+### 1. Gliomas
+
+- If the T1, T1c, T2 and FLAIR scans are already preprocessed (skull-stripped and coregistered):
   
 ```
-(jstablenv):~$jstabl_glioma  -t1 subj_T1.nii.gz -t1c subj_T1c.nii.gz -t2 subj_T2.nii.gz  -fl subj_FLAIR.nii.gz -res segmentation.nii.gz
+(jstablenv):~$jstabl_glioma  -t1 subj_T1.nii.gz -t1c subj_T1c.nii.gz  \
+-t2 subj_T2.nii.gz  -fl subj_FLAIR.nii.gz -res segmentation.nii.gz
 INFO] GPU available.
 [INFO] Reading data.
 [INFO] Building model.
@@ -59,9 +70,10 @@ INFO] GPU available.
 Have a good day!
 ```
   
-- If not, you can install `MRIPreprocessor` and perform the preprocessing as follows:
+- If the data isn't preprocessed, you can install [MRIPreprocessor](https://github.com/ReubenDo/MRIPreprocessor) and perform the preprocessing+segmentation as follows:
 ```
-(jstablenv):~$jstabl_glioma  -t1 subj_T1.nii.gz -t1c subj_T1c.nii.gz -t2 subj_T2.nii.gz  -fl subj_FLAIR.nii.gz -res segmentation.nii.gz --preprocess
+(jstablenv):~$jstabl_glioma  -t1 subj_T1.nii.gz -t1c subj_T1c.nii.gz \
+ -t2 subj_T2.nii.gz  -fl subj_FLAIR.nii.gz -res segmentation.nii.gz --preprocess
 [INFO] GPU available.
 [INFO] Reading data.
 [INFO] Performing Coregistration
@@ -88,9 +100,9 @@ exporting segmentation...
 Have a good day!
 ```
 
-### White Matter Lesions
+### 2. White Matter Lesions
 
-- If the T1 and FLAIR scans are pre-processed (skull-stripped and coregistered):
+- If the T1 and FLAIR scans are preprocessed (skull-stripped and coregistered):
   
 ```
 (jstablenv):~$ jstabl_wmh  -t1 subj_T1.nii.gz -fl subj_FLAIR.nii.gz -res segmentation.nii.gz
@@ -103,9 +115,10 @@ Have a good day!
 Have a good day!
 ```
   
-- If not, you can install `MRIPreprocessor` and perform the preprocessing+segmentation as follows:
+- If the data isn't preprocessed, you can install [MRIPreprocessor](https://github.com/ReubenDo/MRIPreprocessor) and perform the preprocessing+segmentation as follows:
 ```
-(jstablenv):~$ jstabl_glioma  -t1 subj_T1.nii.gz -fl subj_FLAIR.nii.gz -res segmentation.nii.gz --preprocess
+(jstablenv):~$ jstabl_glioma  -t1 subj_T1.nii.gz -fl subj_FLAIR.nii.gz \
+-res segmentation.nii.gz --preprocess
 [INFO] GPU available.
 [INFO] Reading data.
 [INFO] Performing Coregistration
