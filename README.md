@@ -7,7 +7,7 @@ This work propose a new technique to perform joint brain tissue and lesion segme
 Two types of lesions are considered: gliomas and white matter lesions.
 
 ### Example of joint brain tissues and glioma segmentation:
-![glioma_example](https://github.com/ReubenDo/reubendo.github.io/blob/master/images/together_optimised.gif)
+![glioma_example](https://github.com/ReubenDo/reubendo.github.io/blob/master/images/together_optimised_loop.gif)
 
 If you find this code useful for your research, please cite the following paper:
 ```
