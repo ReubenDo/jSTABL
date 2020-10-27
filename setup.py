@@ -4,10 +4,7 @@
 
 from setuptools import setup, find_packages
 
-
-
 requirements = [
-    'torch==1.6',
     'torchio==0.13.10',
     'pandas',
     'nibabel',
