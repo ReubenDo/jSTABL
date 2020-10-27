@@ -163,6 +163,10 @@ def main():
     
     for fold in range(1,4):
         path_model = os.path.join(list(jstabl.__path__)[0], f"./pretrained/glioma_{fold}.pth")
+        tmp_folder = os.path.dirname(path_model)
+        if not os.path.exists(tmp_folder):
+            os.makedirs(tmp_folder)
+
         if not os.path.isfile(path_model):
             url = f"https://zenodo.org/record/4040853/files/glioma_{fold}.pth?download=1"
             print("Downloading", url, "...")
