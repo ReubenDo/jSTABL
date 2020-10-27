@@ -35,7 +35,7 @@ setup(
     keywords='jSTABL',
     name='jSTABL',
     packages=find_packages(include=['jstabl', 'jstabl.*']),
-    scripts=['jstabl/jstabl_glioma', 'jstabl/jstabl_wmh'],
+    scripts=['jstabl/jstabl_glioma', 'jstabl/jstabl_wmh', 'jstabl/jstabl_control'],
     setup_requires=[],
     tests_require=[],
     url='https://github.com/ReubenDo/jSTABL',

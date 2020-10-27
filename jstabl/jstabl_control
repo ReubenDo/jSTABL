@@ -3,7 +3,6 @@
 
 import argparse
 import os
-import time
 from tqdm import tqdm
 import SimpleITK as sitk
 from urllib.request import urlopen
@@ -33,7 +32,7 @@ from jstabl.utilities.sampling import GridSampler, GridAggregator
 patch_size = (128,128,128)
 
 
-MODALITIES = ['T1', 'T1c', 'T2', 'Flair']
+MODALITIES = ['T1']
 
 
 def multi_inference(paths_dict, 
@@ -60,7 +59,7 @@ def multi_inference(paths_dict,
         affine_pad = batch_pad['T1']['affine']
 
 
-        data = torch.cat([batch_pad[mod][DATA] for mod in MODALITIES],0)
+        data = batch_pad['T1'][DATA]
     
         sampler = GridSampler(data, opt.window_size, border)
         aggregator = GridAggregator(data, border)
@@ -70,7 +69,7 @@ def multi_inference(paths_dict,
             for batch_elemt in tqdm(loader):
                 locations = batch_elemt['location']
                 input_tensor = {'T1':batch_elemt['image'][:,:1,...].to(device)}
-                input_tensor['all'] = batch_elemt['image'].to(device)
+                #input_tensor['all'] = batch_elemt['image'].to(device)
                 labels = 0.0
                 for fold in range(1,4):
                     path_model = os.path.join(list(jstabl.__path__)[0], f"./pretrained/glioma_{fold}.pth")
@@ -93,9 +92,6 @@ def multi_inference(paths_dict,
 
 
 def main():
-    start_time = time.time()
-
-
     opt = parsing_data()
 
     if torch.cuda.is_available():
@@ -106,9 +102,6 @@ def main():
 
     print("[INFO] Reading data.")
     assert os.path.exists(opt.t1), 'T1 scan not found'
-    assert os.path.exists(opt.t1c), 'T1c scan not found'
-    assert os.path.exists(opt.t2), 'T2 scan not found'
-    assert os.path.exists(opt.fl), 'FLAIR scan not found'
 
     if opt.res is None:
         opt.res = opt.t1.replace('.nii', '_seg.nii')
@@ -122,33 +115,21 @@ def main():
             from MRIPreprocessor.mri_preprocessor import Preprocessor
             output_folder = os.path.dirname(opt.res)
             ppr = Preprocessor({
-                        'T1':opt.t1,
-                        'T2':opt.t2,
-                        'T1c':opt.t1c,
-                        'Flair':opt.fl},
+                        'T1':opt.t1},
                         output_folder=output_folder,
                         reference='T1')
             ppr.run_pipeline()
             t1 = os.path.join(output_folder,'skullstripping', 'T1.nii.gz')
-            t2 = os.path.join(output_folder,'skullstripping', 'T2.nii.gz')
-            t1c = os.path.join(output_folder,'skullstripping', 'T1c.nii.gz')
-            fl = os.path.join(output_folder,'skullstripping', 'Flair.nii.gz') 
             
         except ImportError:
             raise ImportError('Please install MRIPreprocessor. Run: ' '\n'
                             '\t pip install  git+https://github.com/ReubenDo/MRIPreprocessor#egg=MRIPreprocessor')
     else:
-        t1 = opt.t1
-        t1c = opt.t1c
-        t2 = opt.t2
-        fl = opt.fl     
+        t1 = opt.t1   
    
     # filing paths
     paths_dict = [Subject(
-        Image('T1', t1, torchio.INTENSITY),
-        Image('T1c', t1c, torchio.INTENSITY),
-        Image('T2', t2, torchio.INTENSITY),
-        Image('Flair', fl, torchio.INTENSITY))]
+        Image('T1', t1, torchio.INTENSITY))]
     
 
     transform_inference = (
@@ -194,38 +175,19 @@ def main():
     model.eval()
 
     multi_inference(paths_dict, model, transform_inference, device, opt)
-
-    t = time.time()-start_time
-    t = int(t)
-    
-    print(f"[INFO] Inference done in {t}s. Segmentation saved here: {opt.res}")
+    print(f"[INFO] Inference done. Segmentation saved here: {opt.res}")
     print("Have a good day!")
 
 
 def parsing_data():
     parser = argparse.ArgumentParser(
-        description='Joint Tissue and Glioma segmentation')
+        description='Joint Tissue and Glioma segmentation designed for controls')
 
 
     parser.add_argument('-t1',
                         type=str,
                         required=True,
                         help='Filename of the T1 scan')
-
-    parser.add_argument('-t1c',
-                        type=str,
-                        required=True,
-                        help='Filename of the contrast-enhanced T1 scan')
-
-    parser.add_argument('-t2',
-                        type=str,
-                        required=True,
-                        help='Filename of the T2 scan')
-
-    parser.add_argument('-fl',
-                        type=str,
-                        required=True,
-                        help='Filename of the FLAIR scan')
 
     parser.add_argument('-res',
                         type=str,

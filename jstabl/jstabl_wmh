@@ -2,13 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import time
 import os
-import sys
-import numpy as np
+import time
 from tqdm import tqdm
-import nibabel as nib   
-import pandas as pd 
 import SimpleITK as sitk
 from urllib.request import urlopen
 
@@ -16,28 +12,20 @@ from urllib.request import urlopen
 import torch
 import torch.nn 
 from torch.utils.data import DataLoader
-from torch.optim import lr_scheduler 
 from torchvision.transforms import Compose
 
 # TorchIO
 import torchio
 from torchio import ImagesDataset, Image, Subject, DATA
-from torchio.data.sampler import ImageSampler
 from torchio.transforms import (    
         ZNormalization,
-        RandomMotion, 
-        CenterCropOrPad,
-        Rescale,    
-        RandomNoise,    
-        RandomFlip, 
-        RandomAffine,   
+        CenterCropOrPad, 
         ToCanonical,    
         Resample    
     )   
 
 import jstabl
 from jstabl.networks.UNetModalityMeanTogether import Generic_UNet
-from jstabl.utilities.jaccard import *    
 from jstabl.utilities.sampling import GridSampler, GridAggregator 
 from jstabl.utilities.cropping import crop
 
@@ -57,15 +45,11 @@ def multi_inference_patch(paths_dict,
     print("[INFO] Loading model.")
     subjects_dataset_inf = ImagesDataset(paths_dict, transform=transformation)
 
-    nb_subject = len(subjects_dataset_inf)
-
     border = (0,0,0)
 
     print("[INFO] Starting Inference.")
     for index, batch in enumerate(subjects_dataset_inf):
         original_shape = batch['T1'][DATA].shape[1:]
-        name = batch['T1']['stem'].split('T1')[0]
-        affine = batch['T1']['affine']
         reference = sitk.ReadImage(opt.t1)
 
         new_shape = []
@@ -90,7 +74,7 @@ def multi_inference_patch(paths_dict,
                 input_tensor['FLAIR'] = batch_elemt['image'].to(device)
                 labels = 0.0
                 for fold in range(1,4):
-                    path_model = os.path.join(list(jstabl.__path__)[0], f"./wmh/wmh_{fold}.pth")
+                    path_model = os.path.join(list(jstabl.__path__)[0], f"./pretrained/wmh_{fold}.pth")
                     model.load_state_dict(torch.load(path_model, map_location=device))
                     logits,_ = model(input_tensor)
                     labels+= torch.nn.Softmax(1)(logits)
@@ -106,7 +90,7 @@ def multi_inference_patch(paths_dict,
             sitk.Transform(),
             sitk.sitkNearestNeighbor,
         )
-        sitk.WriteImage(output, opt.output)
+        sitk.WriteImage(output, opt.res)
 
 
 def multi_inference(paths_dict, 
@@ -116,10 +100,6 @@ def multi_inference(paths_dict,
                       opt):
     print("[INFO] Loading model.")
     subjects_dataset_inf = ImagesDataset(paths_dict, transform=transformation)
-
-    nb_subject = len(subjects_dataset_inf)
-
-    border = (0,0,0)
 
     print("[INFO] Starting Inference.")
     for index, batch in enumerate(subjects_dataset_inf):
@@ -135,20 +115,17 @@ def multi_inference(paths_dict,
             with torch.no_grad():
                 labels = 0.0
                 for fold in range(1,4):
-                    path_model = os.path.join(list(jstabl.__path__)[0], f"./wmh/wmh_{fold}.pth")
+                    path_model = os.path.join(list(jstabl.__path__)[0], f"./pretrained/wmh_{fold}.pth")
                     model.load_state_dict(torch.load(path_model, map_location=device))
                     logits,_ = model(input_tensor)
                     labels+= torch.nn.Softmax(1)(logits)
                 labels = labels.argmax(dim=1, keepdim=True)
                 labels = labels[0,0,...].cpu().numpy()
-        except RuntimeError as e:
-            print(e)
+        except RuntimeError:
             print('Memory issue. Trying with a path based approach')
             multi_inference_patch(paths_dict, model, transformation, device, opt)
-        # output = np.zeros(shape[2:])
-        # output[:x_shape,:y_shape,:z_shape] = labels
+
         output = labels
-        #output = nib.Nifti1Image(output.astype(float), affine_pad)
         output = torchio.utils.nib_to_sitk(output.astype(float), affine_pad)
         output = sitk.Resample(
             output,
@@ -156,15 +133,30 @@ def multi_inference(paths_dict,
             sitk.Transform(),
             sitk.sitkNearestNeighbor,
         )
-        sitk.WriteImage(output, opt.output)
+        sitk.WriteImage(output, opt.res)
 
 
 
 def main():
+    start_time = time.time()
+    
     opt = parsing_data()
 
-    output_folder = os.path.dirname(opt.output)
-    if not os.path.exists(output_folder):
+    if torch.cuda.is_available():
+        print("[INFO] GPU available.")  
+    else:
+        print("[INFO] GPU isn't available. Using CPU instead.")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    print("[INFO] Reading data.")
+    assert os.path.exists(opt.t1), 'T1 scan not found'
+    assert os.path.exists(opt.fl), 'FLAIR scan not found'
+
+    if opt.res is None:
+    	opt.res = opt.t1.replace('.nii', '_seg.nii')
+
+    output_folder = os.path.dirname(opt.res)
+    if not os.path.exists(output_folder) and len(output_folder)>0:
         os.makedirs(output_folder)
 
     if opt.preprocess:
@@ -187,13 +179,6 @@ def main():
         t1 = opt.t1
         fl = opt.fl
 
-    print("[INFO] Reading data.")
-    # Dictionary with data parameters for NiftyNet Reader
-    if torch.cuda.is_available():
-        print('[INFO] GPU available.')  
-    else:
-        print("[INFO] GPU isn't available. Using CPU instead.")
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
    
     # filing paths
     paths_dict = [Subject(
@@ -210,8 +195,7 @@ def main():
      
     # MODEL 
     norm_op_kwargs = {'eps': 1e-5, 'affine': True}  
-    dropout_op_kwargs = {'p': 0, 'inplace': True}   
-    net_nonlin = nn.LeakyReLU   
+    net_nonlin = torch.nn.LeakyReLU   
     net_nonlin_kwargs = {'negative_slope': 1e-2, 'inplace': True}   
 
     print("[INFO] Building model.")  
@@ -233,7 +217,7 @@ def main():
   
 
     for fold in range(1,4):
-        path_model = os.path.join(list(jstabl.__path__)[0], f"./wmh/wmh_{fold}.pth")
+        path_model = os.path.join(list(jstabl.__path__)[0], f"./pretrained/wmh_{fold}.pth")
         if not os.path.isfile(path_model):
             url = f"https://zenodo.org/record/4040853/files/wmh_{fold}.pth?download=1"
             print("Downloading", url, "...")
@@ -246,36 +230,44 @@ def main():
 
     multi_inference(paths_dict, model, transform_inference, device, opt)
 
+    t = time.time()-start_time
+    t = int(t)
+    
+    print(f"[INFO] Inference done in {t}s. Segmentation saved here: {opt.res}")
+    print("Have a good day!")
+
 
 
 def parsing_data():
     parser = argparse.ArgumentParser(
-        description='3D Segmentation Using PyTorch and NiftyNet')
-
-
-    parser.add_argument('-window_size',
-                        type=tuple,
-                        default=patch_size)
-
-    parser.add_argument('-preprocess',
-                        action='store_true', 
-                        help='Preprocess includes co-registration and skull-stripping')
+        description="""Joint Tissue and White Matter Lesion segmentation. \n\nNote that the input scans are resampled to 1x1x3mm during inference.""",
+        			formatter_class=argparse.RawTextHelpFormatter)
 
     parser.add_argument('-t1',
-                        type=str)
-
-    parser.add_argument('-t1c',
-                        type=str)
-
-    parser.add_argument('-t2',
-                        type=str)
+                        type=str,
+                        required=True,
+                        help='Filename of the T1 scan')
 
     parser.add_argument('-fl',
-                        type=str)
-
-    parser.add_argument('-output',
                         type=str,
-                        default='./test_data/output.nii.gz')
+                        required=True,
+                        help='Filename of the FLAIR scan')
+
+    parser.add_argument('-res',
+                        type=str,
+                        default=None,
+                        help='Filename of the OUTPUT segmentation')
+
+    parser.add_argument('--preprocess',
+                        action='store_true', 
+                        help='Tag to use for preprocessing the data (co-registration + skull-stripping)')
+
+
+    parser.add_argument('--window_size',
+                        type=tuple,
+                        default=patch_size,
+                        help='Patch size for patch-based inference')
+
 
     opt = parser.parse_args()
 
