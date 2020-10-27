@@ -7,8 +7,8 @@ from setuptools import setup, find_packages
 
 
 requirements = [
+    'torch==1.6',
     'torchio==0.13.10',
-    'batchgenerators>=0.19.4',
     'pandas',
     'nibabel',
     'SimpleITK',
@@ -42,6 +42,6 @@ setup(
     setup_requires=[],
     tests_require=[],
     url='https://github.com/ReubenDo/jSTABL',
-    version='0.0.01',
+    version='0.0.02',
     zip_safe=False,
 )
