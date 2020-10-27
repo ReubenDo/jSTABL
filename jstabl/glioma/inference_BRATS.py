@@ -35,9 +35,9 @@ from torchio.transforms import (
         Resample    
     )   
 
-from network.UNetModalityMeanTogether import Generic_UNet
-from utilities.jaccard import *    
-from utilities.sampling import GridSampler, GridAggregator 
+from jstabl.networks.UNetModalityMeanTogether import Generic_UNet
+from jstabl.utilities.jaccard import *    
+from jstabl.utilities.sampling import GridSampler, GridAggregator 
 
    
 # Define training and patches sampling parameters   

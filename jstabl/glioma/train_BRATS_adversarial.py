@@ -16,36 +16,30 @@ import torch.nn
 from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler 
 from torchvision.transforms import Compose
+import torch.nn.functional as F
 
 # TorchIO
 import torchio
 from torchio import ImagesDataset, Image, Subject, DATA, Queue
 from torchio.data.sampler import ImageSampler
 from torchio.transforms import (    
-        ZNormalization, 
-        CenterCropOrPad,
-        Rescale,    
+        ZNormalization,
+        CenterCropOrPad,   
         RandomNoise,    
         RandomFlip, 
-        RandomAffine,
-        RandomBlur,
-        Rescale,
-        RandomMotion,
-        RandomGhosting,
-        RandomBiasField,
-        RandomBlur,
-        ToCanonical,    
-        Resample  
+        RandomAffine,   
+        ToCanonical,
     )   
 
-from network.UNetModalityMeanTogether import Generic_UNet
-from utilities.jaccard import *
+from jstabl.networks.UNetModalityMeanTogether import Generic_UNet
+from jstabl.networks.Discriminator import Discriminator
+from jstabl.utilities.jaccard import *
 
-  
 # Define training and patches sampling parameters
 patch_size = (112,112,112)
 queue_length = 8
 samples_per_volume = 1
+
 
 
 # Training parameters
@@ -59,18 +53,30 @@ nb_classes = 10
 
 MODALITIES_CONTROL = ['T1']
 MODALITIES_LESION = ['T1','T1c','T2','Flair']
-DATASETS = ['control', 'lesion', 'augm_control']
-MODALITIES = {'control':MODALITIES_CONTROL, 'lesion':MODALITIES_LESION, 'augm_control':MODALITIES_CONTROL}
+DATASETS = ['control', 'lesion']
+MODALITIES = {'control':MODALITIES_CONTROL, 'lesion':MODALITIES_LESION}
 
-batch_size = {'control':1, 'lesion':2, 'augm_control':1}
+batch_size = {'control':2, 'lesion':2}
 
+def set_requires_grad(model, requires_grad=True):
+    #from https://github.com/jvanvugt/pytorch-domain-adaptation/blob/be63aadc18821d6b19c75df51f264ff08370a765/utils.py#L8
+    for param in model.parameters():
+        param.requires_grad = requires_grad
+
+def merge_skips(skips):
+    skips = [F.interpolate(k, size=skips[1].size()[2:], mode='trilinear') for k in skips]
+    skips = torch.cat(skips, 1)
+    skips = skips.permute(0,4,1,2,3)
+    b_size, z_dim, n_channel, x_dim, y_dim = skips.shape
+    skips = skips.reshape(b_size*z_dim,n_channel, x_dim, y_dim)
+    return skips, z_dim
 
 
 def infinite_iterable(i):
     while True:
         yield from i
 
-def train(paths_dict, model, transformation, device, save_path, opt):
+def train(paths_dict, model, discriminator, transformation, device, save_path, opt):
     
     since = time.time()
 
@@ -148,10 +154,13 @@ def train(paths_dict, model, transformation, device, save_path, opt):
                                                            verbose=True, 
                                                            threshold=1e-3,
                                                            threshold_mode="abs")
+    optimizer_discriminator = torch.optim.Adam(discriminator.parameters(), lr=1e-4)
+    criterion_discriminator = torch.nn.BCEWithLogitsLoss()
 
-    
+
     model = model.to(device)
-     
+    discriminator = discriminator.to(device)
+    
     continue_training = True
 
     
@@ -161,6 +170,9 @@ def train(paths_dict, model, transformation, device, save_path, opt):
     ind_batch['training'] = ind_batch_train
     ind_batch['validation'] = ind_batch_val
 
+
+    
+
     while continue_training:
         epoch+=1
         print('-' * 10)
@@ -168,6 +180,7 @@ def train(paths_dict, model, transformation, device, save_path, opt):
         for param_group in optimizer.param_groups:
             print("Current learning rate is: {}".format(param_group['lr']))
             
+    
         # Each epoch has a training and validation phase
         for phase in ['training','validation']:
         #for phase in ['validation','training']:
@@ -180,91 +193,123 @@ def train(paths_dict, model, transformation, device, save_path, opt):
             running_loss = 0.0
             running_loss_lesion = 0.0
             running_loss_control = 0.0
-            running_loss_augm_control = 0.0
             running_loss_intermod = 0.0
+            running_loss_discriminator = 0.0
+            running_loss_DA = 0.0
             epoch_samples = 0
 
             # Iterate over data
             for _ in tqdm(ind_batch[phase]):
-                # Control data (T1)
                 batch_control = next(dataloaders['control'][phase])
                 labels_control = batch_control['label'][DATA].to(device).type(torch.cuda.IntTensor)
                 inputs_control = {mod:batch_control[mod][DATA].to(device) for mod in MODALITIES_CONTROL}
 
-                # Lesion data (T1 + full set of modalities) 
-                batch_lesion = next(dataloaders['lesion'][phase])
+                batch_lesion= next(dataloaders['lesion'][phase])
                 labels_lesion = batch_lesion['label'][DATA].to(device).type(torch.cuda.IntTensor)
                 inputs_lesion =  {'T1':batch_lesion['T1'][DATA].to(device), 'all': torch.cat([batch_lesion[mod][DATA] for mod in MODALITIES_LESION],1).to(device)}
-                inputs_lesion_T1 = {mod:batch_lesion[mod][DATA].to(device) for mod in MODALITIES_CONTROL}
+                #inputs_lesion_ascontrol = {mod:batch_lesion[mod][DATA].to(device) for mod in MODALITIES_CONTROL}
 
-                # Augmented Control data (T1)
-                batch_augm_control = next(dataloaders['augm_control'][phase])
-                labels_augm_control = batch_augm_control['label'][DATA].to(device).type(torch.cuda.IntTensor)
-                inputs_augm_control =  {'T1':batch_augm_control['T1'][DATA].to(device)}
-
-                # Batch sizes (useful when the batch is not full at the end of the epoch)
                 bs_control = inputs_control['T1'].shape[0]
                 bs_lesion = inputs_lesion['T1'].shape[0]
-                bs_augm_control = inputs_augm_control['T1'].shape[0]
+                sum_batch_size = bs_control +  bs_lesion
+                #bs_lesion_T1 = inputs_lesion_T1['T1'].shape[0]
 
                                
-                # zero the parameter gradients
-                optimizer.zero_grad()
 
-                # track history if only in train
+                # PHASE 1: TRAIN DISCRIMINATOR
                 with torch.set_grad_enabled(phase == 'training'):
-                    # Concatenating the 3 predictions made on the T1 for a faster computation
-                    input_T1 = {'T1':torch.cat([inputs_control['T1'],inputs_lesion_T1['T1'], inputs_augm_control['T1']],0)}
-                    outputs_T1, _ = model(input_T1)
+                    model.eval()
+                    if phase == 'training':
+                        discriminator.train()  # Set model to training mode
+                    else:
+                        discriminator.eval()  # Set model to evaluate mode
 
-                    # Deconcatenating the 3 predictions
-                    outputs_control = outputs_T1[:bs_control,...]
-                    outputs_lesion_T1 = outputs_T1[bs_control:bs_control+bs_lesion,...]
-                    output_augm_control = outputs_T1[-bs_augm_control:,...]
+                    set_requires_grad(model, requires_grad=False)
+                    set_requires_grad(discriminator, requires_grad=True)
+                    skips = model({'T1':torch.cat([inputs_control['T1'],inputs_lesion['T1']],0)}, skip_only=True)
 
-                    # Prediction using the full set of modalities (lesion data)
+                    inputs_discrimator, z_dim = merge_skips(skips)
+                    
+                    labels_discriminator = torch.cat((torch.zeros(bs_control*z_dim),
+                                   torch.ones(bs_lesion*z_dim)), 0).to(device)
+
+
+                    outputs_discriminator = discriminator(inputs_discrimator).squeeze()
+                    loss_discriminator = criterion_discriminator(outputs_discriminator, labels_discriminator)
+                    accuracy_discriminator = ((outputs_discriminator>0).long() == labels_discriminator.long()).float().mean().item()
+
+                    if phase =='training':
+                        optimizer_discriminator.zero_grad()
+                        loss_discriminator.backward()
+                        optimizer_discriminator.step()
+
+
+
+
+                # PHASE 2: TRAIN SEGMENTER
+                with torch.set_grad_enabled(phase == 'training'):
+                    discriminator.eval()
+                    if phase == 'training':
+                        model.train()  # Set model to training mode
+                    else:
+                        model.eval()  # Set model to evaluate mode
+
+                    set_requires_grad(model, requires_grad=True)
+                    set_requires_grad(discriminator, requires_grad=False)
+
                     outputs_lesion, _ = model(inputs_lesion)
+                    outputs, skips = model({'T1':torch.cat([inputs_control['T1'],inputs_lesion['T1']],0)})
 
-                    # Loss computation using the Jaccard distance
+                    inputs_discrimator, _ = merge_skips(skips)
+
+
+                    outputs_discriminator = discriminator(inputs_discrimator).squeeze()
+                    loss_discriminator_inv = criterion_discriminator(outputs_discriminator, labels_discriminator)
+
+                    outputs_control = outputs[:bs_control,...]
+                    outputs_lesion_ascontrol = outputs[bs_control:,...]
+    
                     loss_control = jaccard_tissue(outputs_control, labels_control)
                     loss_lesion = jaccard_lesion(outputs_lesion, 6.0+labels_lesion)
-                    loss_augm_control = jaccard_tissue(output_augm_control, labels_augm_control)
-                    loss_intermod = jaccard_tissue(outputs_lesion, outputs_lesion_T1, is_prob=True)
+                    loss_intermod = jaccard_tissue(outputs_lesion, outputs_lesion_ascontrol, is_prob=True) 
 
                     if epoch>opt.warmup and phase=='training':
-                        loss = 1/2*(loss_control + loss_augm_control) + loss_lesion  +  loss_intermod    
+                        loss = loss_control + loss_lesion + loss_intermod - 0.1*opt.weight_discri*loss_discriminator_inv
+                    elif epoch>opt.warmup_discriminator and phase=='training':
+                        loss = loss_control + loss_lesion - 0.1*opt.weight_discri*(epoch-opt.warmup_discriminator)/(opt.warmup -opt.warmup_discriminator)*loss_discriminator_inv
                     else:
-                        loss =  1/2*(loss_control + loss_augm_control) + loss_lesion                      
-                    
-                    # backward + optimize only if in training phase
+                        loss = loss_control + loss_lesion                     
+
                     if phase == 'training':
+                        optimizer.zero_grad()
                         loss.backward()
                         optimizer.step()
+
                         
 
                 # statistics
                 epoch_samples += 1
                 running_loss += loss.item()
                 running_loss_control += loss_control.item()
-                running_loss_augm_control += loss_augm_control.item()
                 running_loss_lesion += loss_lesion.item()
-                running_loss_intermod += loss_intermod.item()   
+                running_loss_intermod += loss_intermod.item()
+                running_loss_discriminator+= accuracy_discriminator   
 
             epoch_loss = running_loss / epoch_samples
             epoch_loss_control = running_loss_control / epoch_samples
-            epoch_loss_augm_control = running_loss_augm_control / epoch_samples
             epoch_loss_lesion = running_loss_lesion / epoch_samples
             epoch_loss_intermod = running_loss_intermod / epoch_samples
+            epoch_loss_discrimator = running_loss_discriminator / epoch_samples
 
             
             print('{}  Loss Seg Control: {:.4f}'.format(
                 phase, epoch_loss_control))
-            print('{}  Loss Seg Augm Control: {:.4f}'.format(
-                phase, epoch_loss_augm_control))
             print('{}  Loss Seg Lesion: {:.4f}'.format(
                 phase, epoch_loss_lesion))
             print('{}  Loss Seg Intermod: {:.4f}'.format(
                 phase, epoch_loss_intermod))                    
+            print('{}  Loss Discriminator: {:.4f}'.format(
+                phase, epoch_loss_discrimator)) 
 
             if phase == 'validation':
                 if val_eval_criterion_MA is None: #first iteration
@@ -289,14 +334,17 @@ def train(paths_dict, model, transformation, device, save_path, opt):
                     best_val_eval_criterion_MA = val_eval_criterion_MA
                     best_epoch = epoch
                     torch.save(model.state_dict(), save_path.format('best'))
-
+                    torch.save(discriminator.state_dict(), save_path.format('discriminator_best'))
+            
                 else:
                     if epoch-best_epoch>nb_patience:
                         continue_training=False
 
                 if epoch==opt.warmup:
-                    torch.save(model.state_dict(), save_path.format(opt.warmup))
+                    torch.save(model.state_dict(), save_path.format(epoch))
+                    torch.save(discriminator.state_dict(), save_path.format('discriminator_'+str(epoch)))
 
+    
     time_elapsed = time.time() - since
     print('Training completed in {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
@@ -304,9 +352,16 @@ def train(paths_dict, model, transformation, device, save_path, opt):
     print('Best epoch is {}'.format(best_epoch))
 
 
+
+
 def main():
     opt = parsing_data()
 
+
+    opt = parsing_data()
+
+
+    
     print("[INFO]Reading data")
     # Dictionary with data parameters for NiftyNet Reader
     if torch.cuda.is_available():
@@ -344,28 +399,26 @@ def main():
     # SPLITS
     split_path = dict()
     split_path['control'] = opt.split_control
-    split_path['augm_control'] = opt.split_control
     split_path['lesion'] = opt.split_lesion
-    
+
     for dataset in DATASETS:
         assert os.path.isfile(split_path[dataset]), f'{dataset}: split not found'
 
     path_file = dict()
     path_file['control'] = opt.path_control
-    path_file['augm_control'] = opt.path_control
     path_file['lesion'] = opt.path_lesion
-    
-    list_split = ['training', 'validation']
+
+    splits = ['training', 'validation']
     paths_dict = dict()
 
     for dataset in DATASETS:
         df_split = pd.read_csv(split_path[dataset],header =None)
         list_file = dict()
-        for split in list_split:
+        for split in splits:
             list_file[split] = df_split[df_split[1].isin([split])][0].tolist()
         
-        paths_dict_dataset = {split:[] for split in list_split}
-        for split in list_split:
+        paths_dict_dataset = {split:[] for split in splits}
+        for split in splits:
             for subject in list_file[split]:
                 subject_data = []
                 for modality in MODALITIES[dataset]:
@@ -373,44 +426,24 @@ def main():
                 if split in ['training', 'validation']:
                     subject_data.append(Image('label', path_file[dataset]+subject+'Label.nii.gz', torchio.LABEL))
                 paths_dict_dataset[split].append(Subject(*subject_data))
-            print(dataset, split, len(paths_dict_dataset[split]))
+            print(f'{dataset} / {split}: {len(paths_dict_dataset[split])} subjects')
         paths_dict[dataset] = paths_dict_dataset
             
-
 
     # PREPROCESSING
     transform_training = dict()
     transform_validation = dict()
     for dataset in DATASETS:
-        if dataset=='augm_control':
-            transform_training[dataset] = (
-                Rescale((0, 1)),
-                ToCanonical(),
-                RandomMotion(),
-                RandomGhosting(),
-                RandomBiasField(),
-                RandomBlur((0,2)),
-                ZNormalization(),
-                CenterCropOrPad((144,192,144)),
-                RandomAffine(scales=(0.9, 1.1), degrees=10),
-                RandomNoise(std_range=(0, 0.10)),
-                RandomFlip(axes=(0,)), 
-                )   
-            transform_training[dataset] = Compose(transform_training[dataset])
+        transform_training[dataset] = (
+            ToCanonical(),
+            ZNormalization(),
+            CenterCropOrPad((144,192,144)),
+            RandomAffine(scales=(0.9, 1.1), degrees=10),
+            RandomNoise(std_range=(0, 0.10)),
+            RandomFlip(axes=(0,)), 
+            )   
+        transform_training[dataset] = Compose(transform_training[dataset])   
 
-        else:
-            transform_training[dataset] = (
-                ToCanonical(),
-                ZNormalization(),
-                CenterCropOrPad((144,192,144)),
-                RandomAffine(scales=(0.9, 1.1), degrees=10),
-                RandomNoise(std_range=(0, 0.10)),
-                RandomFlip(axes=(0,)), 
-                )   
-            transform_training[dataset] = Compose(transform_training[dataset])   
-
-    
-    
         transform_validation[dataset] = (
             ToCanonical(),
             ZNormalization(),
@@ -418,8 +451,8 @@ def main():
             )
         transform_validation[dataset] = Compose(transform_validation[dataset]) 
 
-    
-    transform = {'training': transform_training, 'validation':transform_validation}   
+
+    transform = {'training': transform_training, 'validation':transform_validation}  
     
     # MODEL 
     norm_op_kwargs = {'eps': 1e-5, 'affine': True}  
@@ -427,6 +460,8 @@ def main():
     net_nonlin = nn.LeakyReLU   
     net_nonlin_kwargs = {'negative_slope': 1e-2, 'inplace': True}   
 
+    
+    
     print("[INFO] Building model")  
     model= Generic_UNet(input_modalities=['T1', 'all'],   
                         base_num_features=32,   
@@ -444,14 +479,22 @@ def main():
                         final_nonlin=torch.nn.Softmax(1),
                         input_features={'T1':1, 'all':4})
   
+
+    discriminator = Discriminator(nb_channels=32+2*32+4*32+8*32,
+                                  nb_classes = 1,
+                                  base_num_features=8,
+                                  shape=(2,2))
     
+
     print("[INFO] Training")
     train(paths_dict, 
-        model, 
-        transform, 
+        model,
+        discriminator, 
+        transform,
         device, 
         save_path,
         opt)
+
 
 
     sys.stdout = orig_stdout
@@ -488,6 +531,14 @@ def parsing_data():
     parser.add_argument('--warmup',
                     type=int,
                     default=70)
+
+    parser.add_argument('--warmup_discriminator',
+                    type=int,
+                    default=20)
+
+    parser.add_argument('--weight_discri',
+                    type=int,
+                    default=3)
 
 
     opt = parser.parse_args()

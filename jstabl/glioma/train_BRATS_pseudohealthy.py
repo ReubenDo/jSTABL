@@ -30,8 +30,8 @@ from torchio.transforms import (
         ToCanonical,
     )   
 
-from network.UNetModalityMeanTogether import Generic_UNet
-from utilities.jaccard import *
+from jstabl.networks.UNetModalityMeanTogether import Generic_UNet
+from jstabl.utilities.jaccard import *
 
   
 # Define training and patches sampling parameters

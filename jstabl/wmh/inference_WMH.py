@@ -31,9 +31,9 @@ from torchio.transforms import (
         ToCanonical,
     )   
 
-from network.UNetModalityMeanTogether import Generic_UNet
-from utilities.jaccard import *    
-from utilities.sampling import GridSampler, GridAggregator  
+from jstabl.networks.UNetModalityMeanTogether import Generic_UNet
+from jsabl.utilities.jaccard import *    
+from jsabl.utilities.sampling import GridSampler, GridAggregator  
      
 
 MODALITIES = ['T1','FLAIR']

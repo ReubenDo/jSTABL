@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import argparse
+import time
+import os
+import sys
+import numpy as np
+from tqdm import tqdm
+import nibabel as nib   
+import pandas as pd 
+import SimpleITK as sitk
+from urllib.request import urlopen
+
+# pytorch 
+import torch
+import torch.nn 
+from torch.utils.data import DataLoader
+from torch.optim import lr_scheduler 
+from torchvision.transforms import Compose
+
+# TorchIO
+import torchio
+from torchio import ImagesDataset, Image, Subject, DATA
+from torchio.data.sampler import ImageSampler
+from torchio.transforms import (    
+        ZNormalization,
+        RandomMotion, 
+        CenterCropOrPad,
+        Rescale,    
+        RandomNoise,    
+        RandomFlip, 
+        RandomAffine,   
+        ToCanonical,    
+        Resample    
+    )   
+
+import jstabl
+from jstabl.networks.UNetModalityMeanTogether import Generic_UNet
+from jstabl.utilities.jaccard import *    
+from jstabl.utilities.sampling import GridSampler, GridAggregator 
+from jstabl.utilities.cropping import crop
+
+   
+# Define training and patches sampling parameters   
+patch_size = (128,128,48)
+
+
+MODALITIES = ['T1', 'Flair']
+
+
+def multi_inference_patch(paths_dict, 
+                      model,
+                      transformation,
+                      device,
+                      opt):
+    print("[INFO] Loading model.")
+    subjects_dataset_inf = ImagesDataset(paths_dict, transform=transformation)
+
+    nb_subject = len(subjects_dataset_inf)
+
+    border = (0,0,0)
+
+    print("[INFO] Starting Inference.")
+    for index, batch in enumerate(subjects_dataset_inf):
+        original_shape = batch['T1'][DATA].shape[1:]
+        name = batch['T1']['stem'].split('T1')[0]
+        affine = batch['T1']['affine']
+        reference = sitk.ReadImage(opt.t1)
+
+        new_shape = []
+        for i,dim in enumerate(original_shape):
+            new_dim = dim if dim>opt.window_size[i] else opt.window_size[i]
+            new_shape.append(new_dim)
+
+        batch_pad = CenterCropOrPad(tuple(new_shape))(batch)
+        affine_pad = batch_pad['T1']['affine']
+
+
+        data = torch.cat([batch_pad[mod][DATA] for mod in MODALITIES],0)
+    
+        sampler = GridSampler(data, opt.window_size, border)
+        aggregator = GridAggregator(data, border)
+        loader = DataLoader(sampler, batch_size=1)
+
+        with torch.no_grad():
+            for batch_elemt in tqdm(loader):
+                locations = batch_elemt['location']
+                input_tensor = {'T1':batch_elemt['image'][:,:1,...].to(device)}
+                input_tensor['FLAIR'] = batch_elemt['image'].to(device)
+                labels = 0.0
+                for fold in range(1,4):
+                    path_model = os.path.join(list(jstabl.__path__)[0], f"./wmh/wmh_{fold}.pth")
+                    model.load_state_dict(torch.load(path_model, map_location=device))
+                    logits,_ = model(input_tensor)
+                    labels+= torch.nn.Softmax(1)(logits)
+                labels = labels.argmax(dim=1, keepdim=True)
+                outputs = labels
+                aggregator.add_batch(outputs, locations)
+
+        output = aggregator.output_array.astype(float)
+        output = torchio.utils.nib_to_sitk(output, affine_pad)
+        output = sitk.Resample(
+            output,
+            reference,
+            sitk.Transform(),
+            sitk.sitkNearestNeighbor,
+        )
+        sitk.WriteImage(output, opt.output)
+
+
+def multi_inference(paths_dict, 
+                      model,
+                      transformation,
+                      device,
+                      opt):
+    print("[INFO] Loading model.")
+    subjects_dataset_inf = ImagesDataset(paths_dict, transform=transformation)
+
+    nb_subject = len(subjects_dataset_inf)
+
+    border = (0,0,0)
+
+    print("[INFO] Starting Inference.")
+    for index, batch in enumerate(subjects_dataset_inf):
+
+        reference = sitk.ReadImage(opt.t1)
+        batch_pad = CenterCropOrPad((144,192,48))(batch)
+
+        affine_pad = batch_pad['T1']['affine']
+
+        input_tensor = {'T1':batch_pad['T1'][DATA].unsqueeze(0).to(device)}
+        input_tensor['FLAIR'] = torch.cat([batch_pad[mod][DATA] for mod in MODALITIES],0).unsqueeze(0).to(device) 
+        try:
+            with torch.no_grad():
+                labels = 0.0
+                for fold in range(1,4):
+                    path_model = os.path.join(list(jstabl.__path__)[0], f"./wmh/wmh_{fold}.pth")
+                    model.load_state_dict(torch.load(path_model, map_location=device))
+                    logits,_ = model(input_tensor)
+                    labels+= torch.nn.Softmax(1)(logits)
+                labels = labels.argmax(dim=1, keepdim=True)
+                labels = labels[0,0,...].cpu().numpy()
+        except RuntimeError as e:
+            print(e)
+            print('Memory issue. Trying with a path based approach')
+            multi_inference_patch(paths_dict, model, transformation, device, opt)
+        # output = np.zeros(shape[2:])
+        # output[:x_shape,:y_shape,:z_shape] = labels
+        output = labels
+        #output = nib.Nifti1Image(output.astype(float), affine_pad)
+        output = torchio.utils.nib_to_sitk(output.astype(float), affine_pad)
+        output = sitk.Resample(
+            output,
+            reference,
+            sitk.Transform(),
+            sitk.sitkNearestNeighbor,
+        )
+        sitk.WriteImage(output, opt.output)
+
+
+
+def main():
+    opt = parsing_data()
+
+    output_folder = os.path.dirname(opt.output)
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    if opt.preprocess:
+        try:
+            from MRIPreprocessor.mri_preprocessor import Preprocessor
+            ppr = Preprocessor({
+                        'T1':opt.t1,
+                        'Flair':opt.fl},
+                        output_folder=output_folder,
+                        reference='T1')
+            ppr.run_pipeline()
+            t1 = os.path.join(output_folder,'skullstripping', 'T1.nii.gz')
+            fl = os.path.join(output_folder,'skullstripping', 'Flair.nii.gz')
+            crop([t1,fl])
+            
+        except ImportError:
+            raise ImportError('Please install MRIPreprocessor. Run: ' '\n'
+                            '\t pip install  git+https://github.com/ReubenDo/MRIPreprocessor#egg=MRIPreprocessor')
+    else:
+        t1 = opt.t1
+        fl = opt.fl
+
+    print("[INFO] Reading data.")
+    # Dictionary with data parameters for NiftyNet Reader
+    if torch.cuda.is_available():
+        print('[INFO] GPU available.')  
+    else:
+        print("[INFO] GPU isn't available. Using CPU instead.")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+   
+    # filing paths
+    paths_dict = [Subject(
+    	Image('T1', t1, torchio.INTENSITY),
+    	Image('Flair', fl, torchio.INTENSITY))]
+    
+
+    transform_inference = (
+            ToCanonical(),
+            ZNormalization(),
+            Resample((1,1,3)),       
+        )   
+    transform_inference = Compose(transform_inference) 
+     
+    # MODEL 
+    norm_op_kwargs = {'eps': 1e-5, 'affine': True}  
+    dropout_op_kwargs = {'p': 0, 'inplace': True}   
+    net_nonlin = nn.LeakyReLU   
+    net_nonlin_kwargs = {'negative_slope': 1e-2, 'inplace': True}   
+
+    print("[INFO] Building model.")  
+    model= Generic_UNet(input_modalities=['T1', 'FLAIR'],   
+                        base_num_features=32,   
+                        num_classes=8,     
+                        num_pool=4, 
+                        num_conv_per_stage=2,   
+                        feat_map_mul_on_downscale=2,    
+                        conv_op=torch.nn.Conv3d,    
+                        norm_op=torch.nn.InstanceNorm3d,    
+                        norm_op_kwargs=norm_op_kwargs,  
+                        nonlin=net_nonlin,  
+                        nonlin_kwargs=net_nonlin_kwargs,      
+                        convolutional_pooling=False,     
+                        convolutional_upsampling=False,  
+                        final_nonlin=lambda x: x,
+                        input_features={'T1':1, 'FLAIR':2})
+  
+
+    for fold in range(1,4):
+        path_model = os.path.join(list(jstabl.__path__)[0], f"./wmh/wmh_{fold}.pth")
+        if not os.path.isfile(path_model):
+            url = f"https://zenodo.org/record/4040853/files/wmh_{fold}.pth?download=1"
+            print("Downloading", url, "...")
+            data = urlopen(url).read()
+            with open(path_model, 'wb') as f:
+                f.write(data)
+    model.to(device)
+    model.eval()
+
+
+    multi_inference(paths_dict, model, transform_inference, device, opt)
+
+
+
+def parsing_data():
+    parser = argparse.ArgumentParser(
+        description='3D Segmentation Using PyTorch and NiftyNet')
+
+
+    parser.add_argument('-window_size',
+                        type=tuple,
+                        default=patch_size)
+
+    parser.add_argument('-preprocess',
+                        action='store_true', 
+                        help='Preprocess includes co-registration and skull-stripping')
+
+    parser.add_argument('-t1',
+                        type=str)
+
+    parser.add_argument('-t1c',
+                        type=str)
+
+    parser.add_argument('-t2',
+                        type=str)
+
+    parser.add_argument('-fl',
+                        type=str)
+
+    parser.add_argument('-output',
+                        type=str,
+                        default='./test_data/output.nii.gz')
+
+    opt = parser.parse_args()
+
+    return opt
+
+
+if __name__ == '__main__':
+    main()
+
+
+
