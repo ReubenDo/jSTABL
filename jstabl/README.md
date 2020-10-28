@@ -1,44 +1,49 @@
-# Learning joint Segmentation of Tissues And Brain Lesions (jSTABL) from task-specific hetero-modal domain-shifted datasets
+# Installation
+### 1. Create a [conda](https://docs.conda.io/en/latest/) environment (recommended)
+```
+ENVNAME="jstablenv"
+conda create -n $ENVNAME python -y
+conda activate $ENVNAME
+```
+### 2. Install [PyTorch](https://pytorch.org/)
+Please install [PyTorch](https://pytorch.org/) for your CUDA toolkit within the conda environment:
 
-Public pytorch implementation for our paper [Learning joint segmentation of tissues and brain lesions from task-specific hetero-modal domain-shifted datasets], (https://arxiv.org/abs/2009.04009)
-which was invited in the MIDL 2019 Special Issue - Medical Image Analysis. 
+### 3. Install jSTABL
+Within the conda environment:
+```
+pip install -e  git+https://github.com/ReubenDo/jSTABL#egg=jSTABL
+```
+# Data
+### Control data
+Consists of 35 T1 scans from the OASIS project with annotations of 143 structures of the brain provided by [Neuromorphometrics, Inc.](http://Neuromorphometrics.com/) under academic subscription. From the 143 structures, we  deducted the 6 tissue  classes. Additionnaly, 25 T1 control scans from [ADNI-2](adni.loni.usc.edu) were added with bronze standard parcellation of the brain structures computed with the accurate but time-consuming [GIF algorithm](https://pubmed.ncbi.nlm.nih.gov/25879909/). The T1c, T2 and FLAIR scans are missing.
 
-If you find this code useful for your research, please cite the following paper:
+### Glioma data
+Consists of 285 patients (210 with high grade glioma and 75 with low grade glioma) from the training set of [BraTS18](https://www.med.upenn.edu/sbia/brats2018/data.html). T1, T1c, T2 and FLAIR scans are provided for each patient. Three tumour structures are annotated. The tissue annotations are missing.
 
+### White Matter Lesions data
+Consists of 60 sets of brain MR imagesfrom the  [White  Matter Hyperintensities (WMH)](https://wmh.isi.uu.nl/) database. T1 and FLAIR scans are provided for each patient. The white matter lesions are annotated. The tissue annotations are missing.
 
+# Training the models
 
-## Virtual Environment Setup
-
-The code is implemented in Python 3.6 using using the PyTorch library. 
-Requirements:
-
- * Set up a virtual environment (e.g. conda or virtualenv) with Python 3.6
- * Install all requirements using:
-  
-  ````pip install -r requirements.txt````
-  
-## Data
-
-## Training the Models
-
-### White Matter Lesions
-To train:
-
-```` python3 train_BRATS_noDA.py --model_dir ./models/BRATS/noDA/ ````
-### Glioma
+## Glioma
 Without Domain Adaptation:
 
-```` python3 train_WMH_noDA.py --model_dir ./models/WMH/noDA/ ````
+```` python3 glioma/train_WMH_noDA.py --model_dir models/WMH/noDA/ ````
 
 With Data Augmentation:
 
-```` python3 train_BRATS_augmentation.py --model_dir ./models/BRATS/augm/ ````
+```` python3 glioma/train_BRATS_augmentation.py --model_dir models/BRATS/augm/ ````
 
 With Adversarial Domain Adaptation:
 
-```` python3 train_BRATS_adversarial.py --model_dir ./models/BRATS/adv/ ````
-
+```` python3 glioma/train_BRATS_adversarial.py --model_dir models/BRATS/adv/ ````
 
 With Annotated Pseudo-Healthy Scans:
 
-```` python3 train_BRATS_pseudohealthy.py --model_dir ./models/BRATS/pseudohealthy/ ````
+```` python3 glioma/train_BRATS_pseudohealthy.py --model_dir models/BRATS/pseudohealthy/ ````
+
+## White Matter Lesions
+To train:
+
+```` python3 wmh/train_BRATS_noDA.py --model_dir models/BRATS/noDA/ ````
+
