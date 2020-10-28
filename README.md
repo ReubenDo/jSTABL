@@ -52,13 +52,14 @@ To install it within the conda environment:
 ## Usage
 Using jSTABL is straightforward in any terminal on your linux system. The following examples show how to perform: 1. joint brain tissues and glioma segmentation; 2. joint brain tissues and white matter lesion segmentation.
 
-The framework has been trained on preprocessed data, i.e. on skull-stripped and coregistered scans. 
+The framework has been trained on preprocessed data, i.e. on skull-stripped and coregistered scans.
+Additionnally, the data has been cropped to avoid performing inference on patchs containing only zeros.
 
 If the data is not already preprocessed, an external library [MRIPreprocessor](https://github.com/ReubenDo/MRIPreprocessor) can be directly employed in the framework to perform this preprocessing. Note that other options could be considered such as the [BraTS Toolkit](https://github.com/neuronflow/BraTS-Toolkit).
 
 ### 1. Gliomas
 
-- If the T1, T1c, T2 and FLAIR scans are already preprocessed (skull-stripped and coregistered):
+- If the T1, T1c, T2 and FLAIR scans are already preprocessed (skull-stripped, coregistered and cropped):
   
 ```
 (jstablenv):~$jstabl_glioma  -t1 subj_T1.nii.gz -t1c subj_T1c.nii.gz  \
@@ -105,7 +106,7 @@ Have a good day!
 
 ### 2. White Matter Lesions
 
-- If the T1 and FLAIR scans are preprocessed (skull-stripped and coregistered):
+- If the T1 and FLAIR scans are preprocessed (skull-stripped, coregistered and cropped):
   
 ```
 (jstablenv):~$ jstabl_wmh  -t1 subj_T1.nii.gz -fl subj_FLAIR.nii.gz -res segmentation.nii.gz
