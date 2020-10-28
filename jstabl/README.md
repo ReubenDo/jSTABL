@@ -11,7 +11,7 @@ Please install [PyTorch](https://pytorch.org/) for your CUDA toolkit within the 
 ### 3. Install jSTABL
 Within the conda environment:
 ```
-pip install -e  git+https://github.com/ReubenDo/jSTABL#egg=jSTABL
+(jstablenv):~ pip install -e  git+https://github.com/ReubenDo/jSTABL#egg=jSTABL
 ```
 # Data
 ### Control data
@@ -28,22 +28,32 @@ Consists of 60 sets of brain MR imagesfrom the  [White  Matter Hyperintensities 
 ## Glioma
 Without Domain Adaptation:
 
-```` python3 glioma/train_WMH_noDA.py --model_dir models/WMH/noDA/ ````
+``` 
+(jstablenv):~ python3 glioma/train_WMH_noDA.py --model_dir models/WMH/noDA/ 
+```
 
 With Data Augmentation:
 
-```` python3 glioma/train_BRATS_augmentation.py --model_dir models/BRATS/augm/ ````
+```
+(jstablenv):~ python3 glioma/train_BRATS_augmentation.py --model_dir models/BRATS/augm/
+```
 
 With Adversarial Domain Adaptation:
 
-```` python3 glioma/train_BRATS_adversarial.py --model_dir models/BRATS/adv/ ````
+``` 
+(jstablenv):~ python3 glioma/train_BRATS_adversarial.py --model_dir models/BRATS/adv/ 
+```
 
 With Annotated Pseudo-Healthy Scans:
 
-```` python3 glioma/train_BRATS_pseudohealthy.py --model_dir models/BRATS/pseudohealthy/ ````
+```
+(jstablenv):~ python3 glioma/train_BRATS_pseudohealthy.py --model_dir models/BRATS/pseudohealthy/ 
+```
 
 ## White Matter Lesions
 To train:
 
-```` python3 wmh/train_BRATS_noDA.py --model_dir models/BRATS/noDA/ ````
+``` 
+(jstablenv):~ python3 wmh/train_BRATS_noDA.py --model_dir models/BRATS/noDA/ 
+```
 
