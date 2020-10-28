@@ -26,6 +26,7 @@ from torchio.transforms import (
 import jstabl
 from jstabl.networks.UNetModalityMeanTogether import Generic_UNet
 from jstabl.utilities.sampling import GridSampler, GridAggregator 
+from jstabl.utilities.cropping import crop
 
    
 # Define training and patches sampling parameters   
@@ -120,6 +121,8 @@ def main():
                         reference='T1')
             ppr.run_pipeline()
             t1 = os.path.join(output_folder,'skullstripping', 'T1.nii.gz')
+
+            crop([t1])
             
         except ImportError:
             raise ImportError('Please install MRIPreprocessor. Run: ' '\n'
