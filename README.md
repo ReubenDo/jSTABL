@@ -2,7 +2,7 @@
 
 Public PyTorch implementation of [Learning joint segmentation of tissues and brain lesions from task-specific hetero-modal domain-shifted datasets](https://arxiv.org/abs/2009.04009) published in Medical Image Analysis.
 
-This work propose a new technique to perform joint brain tissue and lesion segmentation. Due to the lack of fully-annotated data, the framework has been trained  using hetero-modal (missing modalities), task-specific (tissue or lesion annotations) and domain-shifted (different acquisition protocols) datasets.
+This work proposed a technique to perform joint brain tissue and lesion segmentation. Due to the lack of fully-annotated data, the framework has been trained  using hetero-modal (missing modalities), task-specific (tissue or lesion annotations) and domain-shifted (different acquisition protocols) datasets.
 
 Two types of lesions are considered: gliomas and white matter lesions.
 
@@ -50,11 +50,11 @@ pip install git+https://github.com/ReubenDo/MRIPreprocessor#egg=MRIPreprocessor
 ```
 
 ## Usage
-Using jSTABL is straightforward in any terminal on your linux system. The following examples show how to perform: 1. joint brain tissues and gliomas segmentation; 2. joint brain tissues and white matter lesion segmentation.
+Using jSTABL is straightforward in any terminal on your linux system. The following examples show how to perform: 1. joint brain tissues and glioma segmentation; 2. joint brain tissues and white matter lesion segmentation.
 
 The framework has been trained on preprocessed data, i.e. on skull-stripped and coregistered scans. 
 
-If the data is not already preprocessed, an external library [MRIPreprocessor](https://github.com/ReubenDo/MRIPreprocessor) can be directly employed in the framework to perform this preprocessing. Note that other options such as the [BraTS Toolkit](https://github.com/neuronflow/BraTS-Toolkit) are also available.
+If the data is not already preprocessed, an external library [MRIPreprocessor](https://github.com/ReubenDo/MRIPreprocessor) can be directly employed in the framework to perform this preprocessing. Note that other options could be considered such as the [BraTS Toolkit](https://github.com/neuronflow/BraTS-Toolkit).
 
 ### 1. Gliomas
 
@@ -144,3 +144,5 @@ exporting segmentation...
 [INFO] Inference done in 76s. Segmentation saved here: segmentation.nii.gz
 Have a good day!
 ```
+# Copyright
+* Copyright (c) 2020, King's College London. All rights reserved.
