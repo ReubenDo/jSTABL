@@ -38,7 +38,7 @@ Please install [PyTorch](https://pytorch.org/) for your CUDA toolkit within the 
 ### 3. Install jSTABL
 Within the conda environment:
 ```
-pip install -e  git+https://github.com/ReubenDo/jSTABL#egg=jSTABL
+(jstablenv):~ pip install -e  git+https://github.com/ReubenDo/jSTABL#egg=jSTABL
 ```
 
 ### (Optionnal) 4. Install [MRIPreprocessor](https://github.com/ReubenDo/MRIPreprocessor)
@@ -46,7 +46,7 @@ If your data isn't preprocessed (skull-stripped and co-registered) you could use
 
 To install it within the conda environment:
 ```
-pip install git+https://github.com/ReubenDo/MRIPreprocessor#egg=MRIPreprocessor
+(jstablenv):~ pip install git+https://github.com/ReubenDo/MRIPreprocessor#egg=MRIPreprocessor
 ```
 
 ## Usage
