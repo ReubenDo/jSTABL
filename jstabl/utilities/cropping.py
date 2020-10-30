@@ -38,7 +38,7 @@ def find_zeros(img_array):
 def crop(list_img):
     img_crop = nib.load(list_img[0])
     affine = img_crop.affine
-    img_crop_data = img_crop.get_data()
+    img_crop_data = img_crop.get_fdata()
     x_min, x_max, y_min, y_max, z_min, z_max = find_zeros(img_crop_data)
 
     x_max = img_crop_data.shape[0] - x_max
