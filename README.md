@@ -7,7 +7,7 @@ This work proposed a technique to perform joint brain tissue and lesion segmenta
 Two types of lesions are considered: gliomas and white matter lesions.
 
 ### Example of joint brain tissues and glioma segmentation:
-![glioma_example](https://github.com/ReubenDo/reubendo.github.io/blob/master/images/together_optimised_loop.gif)*Example of automatic joint brain tissues and glioma segmentation using jSTABL. Segmented tissue structures: grey matter (green), white matter (yellow), basal ganglia (light blue), ventricles (red), cerebellum (orange) and brainstem (dark blue). Segmented glioma sub-regions: oedema/invasion (purple), non-enhancing solid core (khaki) and enhancing core (metallic blue).*
+![glioma_example](https://github.com/ReubenDo/reubendo.github.io/blob/master/images/together_optimised_loop.gif)*Example of automatic joint brain tissues and glioma segmentation using jSTABL. Segmented tissue structures: grey matter (green), white matter (yellow), basal ganglia (light blue), ventricles (red), cerebellum (orange) and brainstem (dark blue). Segmented glioma sub-regions: oedema/invasion (purple), non-enhancing solid core (khaki) and enhancing core (turquoise).*
 
 
 If you find this code useful for your research, please cite the following paper:
