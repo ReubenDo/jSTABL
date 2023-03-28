@@ -48,8 +48,8 @@ def multi_inference(paths_dict,
 
     print("[INFO] Starting Inference.")
     for index, batch in enumerate(subjects_dataset_inf):
-        original_shape = batch['T1'][DATA].shape[1:]
-        reference = sitk.ReadImage(opt.t1)
+        original_shape = batch['T1c'][DATA].shape[1:]
+        reference = sitk.ReadImage(opt.t1c)
 
         new_shape = []
         for i,dim in enumerate(original_shape):
@@ -127,7 +127,7 @@ def main():
                         'T1c':opt.t1c,
                         'Flair':opt.fl},
                         output_folder=output_folder,
-                        reference='T1')
+                        reference='T1c')
             ppr.run_pipeline()
             t1 = os.path.join(output_folder,'skullstripping', 'T1.nii.gz')
             t2 = os.path.join(output_folder,'skullstripping', 'T2.nii.gz')
