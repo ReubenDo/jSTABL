@@ -102,7 +102,7 @@ class GridAggregator:
     def crop_batch(windows, location, border=None):
         if not border:
             return windows, location
-        location = location.astype(np.int)
+        location = location.astype(np.int32)
 
         batch_shape = windows.shape
         spatial_shape = batch_shape[2:]  # ignore batch and channels dim
@@ -117,7 +117,7 @@ class GridAggregator:
 
 
         diff = spatial_shape - cropped_shape
-        left = np.floor(diff / 2).astype(np.int)
+        left = np.floor(diff / 2).astype(np.int32)
 
         
         i_ini, j_ini, k_ini = left
